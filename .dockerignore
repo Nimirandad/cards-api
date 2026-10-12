@@ -1,0 +1,11 @@
+.git
+.gitignore
+.dockerignore
+.docker-config/
+Dockerfile
+docker-compose.yml
+compose.yaml
+*.md
+**/*_test.go
+.env
+.gomodcache/
