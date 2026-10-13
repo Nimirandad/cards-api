@@ -78,9 +78,8 @@ func (s *CardService) Create(ctx context.Context, idempotencyKey, holderName, pa
 		return CreateCardResult{}, errors.New("idempotency key required")
 	}
 
-	manualRequest := isManual || pan != "" || expirationMonth != "" || expirationYear != ""
 	requestPAN := pan
-	if manualRequest {
+	if isManual {
 		if pan == "" || expirationMonth == "" || expirationYear == "" {
 			return CreateCardResult{}, ErrManualCardDataRequired
 		}
@@ -104,7 +103,7 @@ func (s *CardService) Create(ctx context.Context, idempotencyKey, holderName, pa
 		}
 	}
 
-	requestHash, err := s.idempotencyRequestHash(holderName, requestPAN, expirationMonth, expirationYear, manualRequest)
+	requestHash, err := s.idempotencyRequestHash(holderName, requestPAN, expirationMonth, expirationYear, isManual)
 	if err != nil {
 		return CreateCardResult{}, err
 	}
@@ -124,7 +123,7 @@ func (s *CardService) Create(ctx context.Context, idempotencyKey, holderName, pa
 	expiration := cardnumber.CalculateExpirationDate(issuedAt)
 	expirationMonthToStore := expiration.Format("01")
 	expirationYearToStore := expiration.Format("2006")
-	if manualRequest {
+	if isManual {
 		expirationMonthToStore = expirationMonth
 		expirationYearToStore = expirationYear
 	}

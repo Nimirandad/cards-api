@@ -25,6 +25,12 @@ func ValidateLuhn(number string) bool {
 	if len(number) != maxPANLength {
 		return false
 	}
+	for i := 0; i < len(number); i++ {
+		if number[i] < '0' || number[i] > '9' {
+			return false
+		}
+	}
+
 	sum, err := luhnSum(number, false)
 	if err != nil {
 		return false
