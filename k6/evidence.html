@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Evidencia k6 — Cards API</title>
+  <style>
+    :root { color-scheme: light; --ink:#172b4d; --muted:#607089; --line:#e2e8f0; --teal:#287d8e; --paper:#f4f7fb; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { width:min(900px,calc(100% - 32px)); margin:40px auto; }
+    header { padding:30px; border-radius:18px; color:white; background:linear-gradient(125deg,#172b4d,#244e68); }
+    h1 { margin:0; font-size:clamp(26px,5vw,38px); }
+    h2 { margin:0 0 16px; font-size:19px; }
+    header p { margin:8px 0 0; color:#d9e7f1; }
+    .url { display:inline-block; margin-top:16px; color:white; font:13px ui-monospace,monospace; overflow-wrap:anywhere; }
+    .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:16px 0; }
+    article,section { padding:20px; border:1px solid var(--line); border-radius:14px; background:white; }
+    .value { display:block; font-size:26px; font-weight:750; }
+    .label,footer { color:var(--muted); font-size:13px; }
+    section { margin-top:14px; }
+    img { display:block; width:100%; height:auto; }
+    .row { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-top:1px solid var(--line); }
+    code { overflow-wrap:anywhere; }
+    .latency { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .latency div { padding:12px; border-radius:9px; background:var(--paper); }
+    .note { margin:16px 0 0; padding:12px; border-left:4px solid var(--teal); background:#eff8f8; }
+    footer { padding:16px 2px; }
+    @media(max-width:650px) { .grid { grid-template-columns:repeat(2,1fr); } .row { flex-direction:column; } .latency { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Prueba de balanceo con k6</h1>
+      <p>Solicitudes a <code>GET /health</code> atendidas por tareas ECS detrás del ALB.</p>
+      <a class="url" href="https://cards-api-dev-alb-1463139058.us-east-2.elb.amazonaws.com/health">cards-api-dev-alb-1463139058.us-east-2.elb.amazonaws.com/health</a>
+    </header>
+    <div class="grid" aria-label="Resumen de la prueba">
+      <article><span class="value">155</span><span class="label">solicitudes</span></article>
+      <article><span class="value">2</span><span class="label">tareas respondieron</span></article>
+      <article><span class="value">0</span><span class="label">solicitudes fallidas</span></article>
+    </div>
+    <section>
+      <h2>Distribución por tarea</h2>
+      <div class="row"><code>522f90f7b0e7424ab2bcaf0a93dc6f1f</code><strong>77 respuestas · 49,7%</strong></div>
+      <div class="row"><code>e3f6720667504fbea349be91710ac690</code><strong>78 respuestas · 50,3%</strong></div>
+    </section>
+    <section>
+      <h2>Latencia</h2>
+      <div class="latency">
+        <div><span class="label">Promedio</span><br><strong>162,57 ms</strong></div>
+        <div><span class="label">Percentil 95</span><br><strong>167,25 ms</strong></div>
+        <div><span class="label">Máxima</span><br><strong>169,10 ms</strong></div>
+      </div>
+      <p class="note">La corrida duró 30 segundos con 5 usuarios virtuales y conexiones nuevas. Las 155 respuestas fueron HTTP 200; las tres validaciones por respuesta pasaron.</p>
+    </section>
+    <footer>Corrida del 12 de octubre de 2026, de 21:54:08 a 21:54:37 (UTC−03:00). Resumen basado en <code>k6/results/health.json</code>.</footer>
+  </main>
+</body>
+</html>

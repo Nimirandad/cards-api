@@ -13,7 +13,7 @@ import (
 )
 
 type CardUseCase interface {
-	Create(context.Context, string, string, string) (service.CreateCardResult, error)
+	Create(context.Context, string, string, string, string, string, bool) (service.CreateCardResult, error)
 	CardByID(context.Context, string) (service.CreateCardResult, error)
 	List(context.Context, int, string) (service.CardListResult, error)
 	SearchByLast4(context.Context, string) ([]service.CreateCardResult, error)
@@ -24,8 +24,11 @@ type CardHandler struct {
 }
 
 type CreateCardRequest struct {
-	HolderName string `json:"holder_name"`
-	PAN        string `json:"pan,omitempty"`
+	HolderName      string `json:"holder_name"`
+	PAN             string `json:"pan,omitempty"`
+	ExpirationMonth string `json:"expiration_month,omitempty"`
+	ExpirationYear  string `json:"expiration_year,omitempty"`
+	IsManual        bool   `json:"is_manual,omitempty"`
 }
 
 type CardResponse struct {
@@ -39,6 +42,10 @@ type CardResponse struct {
 type CardListResponse struct {
 	Data     []CardResponse  `json:"data"`
 	PageInfo CardPageInfoDTO `json:"page_info"`
+}
+
+type CardSearchResponse struct {
+	Cards []CardResponse `json:"cards"`
 }
 
 type CardPageInfoDTO struct {
@@ -73,11 +80,17 @@ func (h *CardHandler) CreateCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.service.Create(r.Context(), idempotencyKey, req.HolderName, req.PAN)
+	result, err := h.service.Create(r.Context(), idempotencyKey, req.HolderName, req.PAN, req.ExpirationMonth, req.ExpirationYear, req.IsManual)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidPAN):
 			writeError(w, http.StatusBadRequest, "invalid_pan", err.Error())
+		case errors.Is(err, service.ErrInvalidExpiration):
+			writeError(w, http.StatusBadRequest, "invalid_expiration", err.Error())
+		case errors.Is(err, service.ErrExpiredCard):
+			writeError(w, http.StatusBadRequest, "expired_card", err.Error())
+		case errors.Is(err, service.ErrManualCardDataRequired):
+			writeError(w, http.StatusBadRequest, "invalid_manual_card_request", err.Error())
 		case errors.Is(err, service.ErrIdempotencyKeyConflict):
 			writeError(w, http.StatusConflict, "idempotency_key_conflict", err.Error())
 		default:
@@ -198,9 +211,14 @@ func (h *CardHandler) SearchCards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := make([]CardResponse, len(res))
+	if len(res) == 0 {
+		writeError(w, http.StatusNotFound, "card_not_found", "no cards found with the provided last4")
+		return
+	}
+
+	resp := CardSearchResponse{Cards: make([]CardResponse, len(res))}
 	for i, r := range res {
-		resp[i] = CardResponse{
+		resp.Cards[i] = CardResponse{
 			ID:             r.Card.ID,
 			HolderName:     r.Card.HolderName,
 			MaskedPAN:      r.MaskedPAN,

@@ -25,6 +25,9 @@ const (
 var (
 	ErrIdempotencyKeyConflict = errors.New("idempotency key already used with different data")
 	ErrInvalidPAN             = errors.New("invalid PAN")
+	ErrInvalidExpiration      = cardnumber.ErrInvalidExpirationDate
+	ErrExpiredCard            = errors.New("card is expired")
+	ErrManualCardDataRequired = errors.New("manual card creation requires PAN, expiration month and year")
 	ErrCardNotFound           = errors.New("card not found")
 	ErrInvalidLimit           = errors.New("limit must be between 1 and 100")
 	ErrInvalidCursor          = errors.New("invalid pagination cursor")
@@ -67,7 +70,7 @@ func NewCardService(repository CardRepository, panSalt string) *CardService {
 }
 
 // Create creates a new card with the provided holder name and PAN, ensuring idempotency based on the provided key.
-func (s *CardService) Create(ctx context.Context, idempotencyKey, holderName, pan string) (CreateCardResult, error) {
+func (s *CardService) Create(ctx context.Context, idempotencyKey, holderName, pan, expirationMonth, expirationYear string, isManual bool) (CreateCardResult, error) {
 	if err := ctx.Err(); err != nil {
 		return CreateCardResult{}, err
 	}
@@ -75,19 +78,33 @@ func (s *CardService) Create(ctx context.Context, idempotencyKey, holderName, pa
 		return CreateCardResult{}, errors.New("idempotency key required")
 	}
 
+	manualRequest := isManual || pan != "" || expirationMonth != "" || expirationYear != ""
 	requestPAN := pan
+	if manualRequest {
+		if pan == "" || expirationMonth == "" || expirationYear == "" {
+			return CreateCardResult{}, ErrManualCardDataRequired
+		}
 
-	if pan == "" {
+		if !cardnumber.ValidateLuhn(pan) {
+			return CreateCardResult{}, ErrInvalidPAN
+		}
+
+		if err := cardnumber.ValidateExpirationDate(expirationMonth, expirationYear); err != nil {
+			return CreateCardResult{}, ErrInvalidExpiration
+		}
+
+		if cardnumber.IsCardExpired(expirationMonth, expirationYear) {
+			return CreateCardResult{}, ErrExpiredCard
+		}
+	} else {
 		var err error
 		pan, err = cardnumber.GenerateCardNumber()
 		if err != nil {
 			return CreateCardResult{}, err
 		}
-	} else if !cardnumber.ValidateLuhn(pan) {
-		return CreateCardResult{}, ErrInvalidPAN
 	}
 
-	requestHash, err := s.idempotencyRequestHash(holderName, requestPAN)
+	requestHash, err := s.idempotencyRequestHash(holderName, requestPAN, expirationMonth, expirationYear, manualRequest)
 	if err != nil {
 		return CreateCardResult{}, err
 	}
@@ -105,6 +122,12 @@ func (s *CardService) Create(ctx context.Context, idempotencyKey, holderName, pa
 
 	issuedAt := time.Now().UTC()
 	expiration := cardnumber.CalculateExpirationDate(issuedAt)
+	expirationMonthToStore := expiration.Format("01")
+	expirationYearToStore := expiration.Format("2006")
+	if manualRequest {
+		expirationMonthToStore = expirationMonth
+		expirationYearToStore = expirationYear
+	}
 	panMAC := hmac.New(sha256.New, s.panSalt)
 	_, _ = panMAC.Write([]byte(pan))
 	card := model.Card{
@@ -114,8 +137,8 @@ func (s *CardService) Create(ctx context.Context, idempotencyKey, holderName, pa
 		Last4:           last4Digits,
 		Status:          CardStatusActive,
 		IssuedAt:        issuedAt,
-		ExpirationMonth: expiration.Format("01"),
-		ExpirationYear:  expiration.Format("2006"),
+		ExpirationMonth: expirationMonthToStore,
+		ExpirationYear:  expirationYearToStore,
 	}
 	result := CreateCardResult{Card: card, MaskedPAN: maskedPAN}
 	responseBody, err := json.Marshal(result)
@@ -135,13 +158,22 @@ func (s *CardService) Create(ctx context.Context, idempotencyKey, holderName, pa
 	return result, nil
 }
 
-func (s *CardService) idempotencyRequestHash(holderName, pan string) ([]byte, error) {
+func (s *CardService) idempotencyRequestHash(holderName, pan, expirationMonth, expirationYear string, manual bool) ([]byte, error) {
 	type RequestHash struct {
-		HolderName string `json:"holder_name"`
-		PAN        string `json:"pan"`
+		HolderName      string `json:"holder_name"`
+		PAN             string `json:"pan"`
+		ExpirationMonth string `json:"expiration_month,omitempty"`
+		ExpirationYear  string `json:"expiration_year,omitempty"`
+		Manual          bool   `json:"manual,omitempty"`
 	}
 
-	request, err := json.Marshal(RequestHash{HolderName: holderName, PAN: pan})
+	request, err := json.Marshal(RequestHash{
+		HolderName:      holderName,
+		PAN:             pan,
+		ExpirationMonth: expirationMonth,
+		ExpirationYear:  expirationYear,
+		Manual:          manual,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +309,7 @@ func decodeCardListCursor(raw string) (cardListCursor, error) {
 	return cursor, nil
 }
 
-// SearchByLast4 retrieves a list of cards that match the provided last four digits of the PAN, 
+// SearchByLast4 retrieves a list of cards that match the provided last four digits of the PAN,
 // ensuring that the input is valid and refreshing the expiration status of each card.
 func (s *CardService) SearchByLast4(ctx context.Context, last4Digits string) ([]CreateCardResult, error) {
 	if err := ctx.Err(); err != nil {

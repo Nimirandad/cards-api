@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/Nimirandad/cards-api/internal/config"
@@ -15,9 +16,12 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
 	cfg, err := config.LoadFromEnv()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("configuration_load_failed", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	dbConfig := database.Config{
@@ -33,7 +37,8 @@ func main() {
 	db, err := database.Open(dbCtx, dbConfig)
 	cancel()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("database_connection_failed", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -45,8 +50,9 @@ func main() {
 		Handler:           router.New(cardHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	log.Printf("Listening on %s", cfg.HTTPAddr)
+	slog.Info("server_started", slog.String("address", cfg.HTTPAddr))
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+		slog.Error("server_failed", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 }

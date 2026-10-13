@@ -1,0 +1,18 @@
+aws_region         = "us-east-2"
+project_name       = "cards-api"
+environment        = "dev"
+vpc_cidr           = "10.42.0.0/16"
+desired_count      = 2
+task_cpu           = 256
+task_memory        = 512
+db_instance_class  = "db.t4g.micro"
+db_name            = "cards_api"
+db_username        = "cards_api_admin"
+db_allocated_storage = 20
+db_max_allocated_storage = 50
+db_deletion_protection = false
+log_retention_days = 14
+single_nat_gateway = true
+
+# After the first apply creates ECR, push the image and set this value for the second apply.
+# container_image = "123456789012.dkr.ecr.us-east-2.amazonaws.com/cards-api-dev:latest"
